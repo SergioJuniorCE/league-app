@@ -23,5 +23,9 @@ declare namespace NodeJS {
 
 // Used in Renderer process, expose in `preload.ts`
 interface Window {
-  ipcRenderer: import('electron').IpcRenderer
+  electronAPI: {
+    onGameStatus: (listener: (payload: { active: boolean }) => void) => () => void
+    getDesktopSources: () => Promise<Array<{ id: string; name: string }>>
+    saveRecording: (recordingBuffer: ArrayBuffer) => Promise<string>
+  }
 }
