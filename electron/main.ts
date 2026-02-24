@@ -1,8 +1,9 @@
-import { app, BrowserWindow, desktopCapturer, ipcMain } from 'electron'
-import fs from 'node:fs/promises'
-import https from 'node:https'
+import { app, BrowserWindow } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+
+import { createGamePoller } from './gamePoller'
+import { registerIpcHandlers } from './ipcHandlers'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -25,8 +26,6 @@ export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
 let win: BrowserWindow | null
-let gamePollInterval: NodeJS.Timeout | null = null
-let isGameActive = false
 
 function emitGameStatus(active: boolean) {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -34,98 +33,9 @@ function emitGameStatus(active: boolean) {
   }
 }
 
-function checkLiveGameState(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const request = https.request(
-      {
-        hostname: '127.0.0.1',
-        port: 2999,
-        path: '/liveclientdata/allgamedata',
-        method: 'GET',
-        rejectUnauthorized: false,
-        timeout: 2000,
-      },
-      (response) => {
-        response.resume()
-        resolve(response.statusCode === 200)
-      },
-    )
-
-    request.on('timeout', () => {
-      request.destroy()
-      resolve(false)
-    })
-    request.on('error', () => resolve(false))
-    request.end()
-  })
-}
-
-async function pollGameStatus() {
-  const active = await checkLiveGameState()
-  if (active !== isGameActive) {
-    isGameActive = active
-    emitGameStatus(active)
-  }
-}
-
-function startGamePoller() {
-  if (gamePollInterval) {
-    return
-  }
-
-  void pollGameStatus()
-  gamePollInterval = setInterval(() => {
-    void pollGameStatus()
-  }, 3000)
-}
-
-function stopGamePoller() {
-  if (!gamePollInterval) {
-    return
-  }
-
-  clearInterval(gamePollInterval)
-  gamePollInterval = null
-}
-
-function formatTimestamp(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return [
-    date.getFullYear(),
-    pad(date.getMonth() + 1),
-    pad(date.getDate()),
-    pad(date.getHours()),
-    pad(date.getMinutes()),
-    pad(date.getSeconds()),
-  ].join('-')
-}
-
-function registerIpcHandlers() {
-  ipcMain.handle('get-desktop-sources', async () => {
-    const sources = await desktopCapturer.getSources({
-      types: ['window', 'screen'],
-      thumbnailSize: { width: 0, height: 0 },
-      fetchWindowIcons: false,
-    })
-
-    return sources.map((source) => ({
-      id: source.id,
-      name: source.name,
-    }))
-  })
-
-  ipcMain.handle('save-recording', async (_event, recordingBuffer: ArrayBuffer) => {
-    const recordingsDir = path.join(app.getPath('videos'), 'LeagueRecordings')
-    await fs.mkdir(recordingsDir, { recursive: true })
-
-    const fileName = `league-${formatTimestamp(new Date())}.webm`
-    const filePath = path.join(recordingsDir, fileName)
-    const data = Buffer.from(new Uint8Array(recordingBuffer))
-    await fs.writeFile(filePath, data)
-
-    return filePath
-  })
-}
+const gamePoller = createGamePoller((active) => {
+  emitGameStatus(active)
+})
 
 function createWindow() {
   win = new BrowserWindow({
@@ -134,10 +44,12 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.mjs'),
     },
   })
+  win.setMenu(null)
 
   // Test active push message to Renderer-process.
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', (new Date).toLocaleString())
+    win?.webContents.send('game-status', { active: gamePoller.getCurrentStatus() })
   })
 
   if (VITE_DEV_SERVER_URL) {
@@ -153,7 +65,7 @@ function createWindow() {
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    stopGamePoller()
+    gamePoller.stop()
     app.quit()
     win = null
   }
@@ -169,6 +81,6 @@ app.on('activate', () => {
 
 app.whenReady().then(() => {
   registerIpcHandlers()
-  startGamePoller()
+  gamePoller.start()
   createWindow()
 })
