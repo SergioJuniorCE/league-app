@@ -1,8 +1,97 @@
 import { app, desktopCapturer, ipcMain } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { createRequire } from 'node:module'
 
 import { formatTimestamp } from './utils'
+
+const require = createRequire(import.meta.url)
+const ffmpeg = require('fluent-ffmpeg') as typeof import('fluent-ffmpeg')
+const ffmpegStatic = require('ffmpeg-static') as string
+
+// In a packaged Electron app the binary lives outside the ASAR archive.
+const ffmpegBinaryPath = ffmpegStatic.replace('app.asar', 'app.asar.unpacked')
+ffmpeg.setFfmpegPath(ffmpegBinaryPath)
+
+function getRecordingsDir() {
+  return path.join(app.getPath('videos'), 'CruxRecordings')
+}
+
+/** Build the atempo filter chain; `atempo` only accepts 0.5–2.0 per node. */
+function buildAtempoChain(speed: number): string {
+  const nodes: string[] = []
+  let remaining = speed
+
+  if (speed >= 1) {
+    while (remaining > 2.0 + 1e-9) {
+      nodes.push('atempo=2.0')
+      remaining /= 2.0
+    }
+    nodes.push(`atempo=${remaining.toFixed(6)}`)
+  } else {
+    while (remaining < 0.5 - 1e-9) {
+      nodes.push('atempo=0.5')
+      remaining /= 0.5
+    }
+    nodes.push(`atempo=${remaining.toFixed(6)}`)
+  }
+
+  return nodes.join(',')
+}
+
+type ExportParams = {
+  sourcePath: string
+  startSec?: number
+  endSec?: number
+  speedMultiplier?: number
+}
+
+type ExportResult = {
+  success: boolean
+  session?: { filename: string; path: string; size: number; createdAt: number }
+  error?: string
+}
+
+function runFfmpegExport(params: ExportParams & { outputPath: string }): Promise<void> {
+  const { sourcePath, startSec, endSec, speedMultiplier, outputPath } = params
+  const speed = speedMultiplier ?? 1
+  const hasSpeed = speed !== 1
+  const hasTrim = startSec !== undefined || endSec !== undefined
+
+  return new Promise((resolve, reject) => {
+    let cmd = ffmpeg(sourcePath)
+
+    if (hasTrim && !hasSpeed) {
+      // Trim only — use copy codec for fast, lossless export
+      if (startSec !== undefined) cmd = cmd.setStartTime(startSec)
+      if (endSec !== undefined) {
+        const duration =
+          endSec - (startSec ?? 0)
+        cmd = cmd.setDuration(duration)
+      }
+      cmd = cmd.outputOptions(['-c', 'copy'])
+    } else {
+      // Speed change (optionally with trim) — must re-encode
+      if (startSec !== undefined) cmd = cmd.setStartTime(startSec)
+      if (endSec !== undefined) {
+        const duration = endSec - (startSec ?? 0)
+        cmd = cmd.setDuration(duration)
+      }
+
+      if (hasSpeed) {
+        const vFilter = `setpts=${(1 / speed).toFixed(6)}*PTS`
+        const aFilter = buildAtempoChain(speed)
+        cmd = cmd.videoFilter(vFilter).audioFilter(aFilter)
+      }
+    }
+
+    cmd
+      .output(outputPath)
+      .on('error', (err: Error) => reject(err))
+      .on('end', () => resolve())
+      .run()
+  })
+}
 
 export function registerIpcHandlers() {
   ipcMain.handle('get-desktop-sources', async () => {
@@ -21,7 +110,7 @@ export function registerIpcHandlers() {
   ipcMain.handle(
     'save-recording',
     async (_event, recordingBuffer: ArrayBuffer, limits: { maxCount: number; maxSizeGB: number }) => {
-      const recordingsDir = path.join(app.getPath('videos'), 'CruxRecordings')
+      const recordingsDir = getRecordingsDir()
       await fs.mkdir(recordingsDir, { recursive: true })
 
       const fileName = `crux-${formatTimestamp(new Date())}.webm`
@@ -60,8 +149,8 @@ export function registerIpcHandlers() {
   )
 
   ipcMain.handle('get-recordings', async () => {
-    const recordingsDir = path.join(app.getPath('videos'), 'CruxRecordings')
-    
+    const recordingsDir = getRecordingsDir()
+
     try {
       await fs.access(recordingsDir)
     } catch {
@@ -81,7 +170,7 @@ export function registerIpcHandlers() {
             size: stats.size,
             createdAt: stats.birthtimeMs || stats.mtimeMs,
           }
-        })
+        }),
     )
 
     return recordings.sort((a, b) => b.createdAt - a.createdAt)
@@ -94,6 +183,72 @@ export function registerIpcHandlers() {
     } catch (error) {
       console.error('Failed to delete recording:', error)
       return false
+    }
+  })
+
+  ipcMain.handle('export-recording', async (_event, params: ExportParams): Promise<ExportResult> => {
+    const { sourcePath, startSec, endSec, speedMultiplier } = params
+
+    // ── Security: restrict to recordings directory ──────────────────────────
+    const recordingsDir = path.resolve(getRecordingsDir())
+    const normalizedSource = path.resolve(sourcePath)
+
+    if (!normalizedSource.startsWith(recordingsDir + path.sep) && normalizedSource !== recordingsDir) {
+      return { success: false, error: 'Source file is outside the recordings directory.' }
+    }
+
+    // ── Validate speed ───────────────────────────────────────────────────────
+    const speed = speedMultiplier ?? 1
+    if (speed < 0.25 || speed > 16) {
+      return { success: false, error: 'Speed must be between 0.25× and 16×.' }
+    }
+
+    // ── Validate trim range ─────────────────────────────────────────────────
+    if (startSec !== undefined && startSec < 0) {
+      return { success: false, error: 'Start time must be >= 0.' }
+    }
+    if (endSec !== undefined && startSec !== undefined && endSec <= startSec) {
+      return { success: false, error: 'End time must be after start time.' }
+    }
+
+    // ── Confirm source file exists ───────────────────────────────────────────
+    try {
+      await fs.access(normalizedSource)
+    } catch {
+      return { success: false, error: 'Source recording not found.' }
+    }
+
+    const outputName = `crux-edit-${Date.now()}.webm`
+    const outputPath = path.join(recordingsDir, outputName)
+
+    try {
+      await runFfmpegExport({
+        sourcePath: normalizedSource,
+        startSec,
+        endSec,
+        speedMultiplier: speed,
+        outputPath,
+      })
+
+      const stats = await fs.stat(outputPath)
+      return {
+        success: true,
+        session: {
+          filename: outputName,
+          path: outputPath,
+          size: stats.size,
+          createdAt: stats.birthtimeMs || stats.mtimeMs,
+        },
+      }
+    } catch (err) {
+      // Clean up partial output if it exists
+      try {
+        await fs.unlink(outputPath)
+      } catch {
+        // ignore
+      }
+      console.error('FFmpeg export error:', err)
+      return { success: false, error: String(err) }
     }
   })
 }

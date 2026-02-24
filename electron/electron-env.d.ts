@@ -11,7 +11,7 @@ declare namespace NodeJS {
      * │ │
      * │ ├─┬ dist-electron
      * │ │ ├── main.js
-     * │ │ └── preload.js
+     * │ │ └── preload.mjs
      * │
      * ```
      */
@@ -21,13 +21,37 @@ declare namespace NodeJS {
   }
 }
 
-// Used in Renderer process, expose in `preload.ts`
+type RecordingSession = {
+  filename: string
+  path: string
+  size: number
+  createdAt: number
+}
+
+type ExportParams = {
+  sourcePath: string
+  startSec?: number
+  endSec?: number
+  speedMultiplier?: number
+}
+
+type ExportResult = {
+  success: boolean
+  session?: RecordingSession
+  error?: string
+}
+
+// Used in Renderer process, exposed in `preload.ts`
 interface Window {
   electronAPI: {
     onGameStatus: (listener: (payload: { active: boolean }) => void) => () => void
     getDesktopSources: () => Promise<Array<{ id: string; name: string }>>
-    saveRecording: (recordingBuffer: ArrayBuffer) => Promise<string>
-    getRecordings: () => Promise<Array<{ filename: string; path: string; size: number; createdAt: number }>>
+    saveRecording: (
+      recordingBuffer: ArrayBuffer,
+      limits: { maxCount: number; maxSizeGB: number },
+    ) => Promise<string>
+    getRecordings: () => Promise<RecordingSession[]>
     deleteRecording: (filePath: string) => Promise<boolean>
+    exportRecording: (params: ExportParams) => Promise<ExportResult>
   }
 }

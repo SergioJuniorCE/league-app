@@ -16,6 +16,19 @@ type RecordingSession = {
   createdAt: number
 }
 
+type ExportParams = {
+  sourcePath: string
+  startSec?: number
+  endSec?: number
+  speedMultiplier?: number
+}
+
+type ExportResult = {
+  success: boolean
+  session?: RecordingSession
+  error?: string
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   onGameStatus(listener: (payload: GameStatusPayload) => void) {
     const wrappedListener = (_event: Electron.IpcRendererEvent, payload: GameStatusPayload) => {
@@ -38,5 +51,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   deleteRecording(filePath: string) {
     return ipcRenderer.invoke('delete-recording', filePath) as Promise<boolean>
+  },
+  exportRecording(params: ExportParams) {
+    return ipcRenderer.invoke('export-recording', params) as Promise<ExportResult>
   },
 })

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Film, Play, Trash2, VideoOff } from 'lucide-react'
 
 import type { RecordingSession } from '../types/sessions'
+import { VideoEditorPanel } from '../components/VideoEditorPanel'
 
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -23,30 +24,21 @@ export function SessionsView() {
   const [selected, setSelected] = useState<RecordingSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [deletingPath, setDeletingPath] = useState<string | null>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
 
   const loadSessions = useCallback(async () => {
     setLoading(true)
     try {
       const recordings = await window.electronAPI.getRecordings()
       setSessions(recordings)
-      if (recordings.length > 0 && !selected) {
-        setSelected(recordings[0])
-      }
+      setSelected((prev) => prev ?? recordings[0] ?? null)
     } finally {
       setLoading(false)
     }
-  }, [selected])
-
-  useEffect(() => {
-    void loadSessions()
   }, [])
 
   useEffect(() => {
-    const video = videoRef.current
-    if (!video || !selected) return
-    video.load()
-  }, [selected])
+    void loadSessions()
+  }, [loadSessions])
 
   const handleDelete = async (session: RecordingSession) => {
     setDeletingPath(session.path)
@@ -60,6 +52,11 @@ export function SessionsView() {
     } finally {
       setDeletingPath(null)
     }
+  }
+
+  const handleExportDone = (newSession: RecordingSession) => {
+    setSessions((prev) => [newSession, ...prev])
+    setSelected(newSession)
   }
 
   const videoSrc = selected
@@ -91,6 +88,7 @@ export function SessionsView() {
         {sessions.map((session) => {
           const isActive = selected?.path === session.path
           const isDeleting = deletingPath === session.path
+          const isEdit = session.filename.startsWith('crux-edit-')
           return (
             <div
               key={session.path}
@@ -104,6 +102,11 @@ export function SessionsView() {
               <div className="flex items-center gap-1.5">
                 <Play size={11} className={isActive ? 'text-red-400' : 'text-zinc-500'} />
                 <span className="truncate text-xs font-medium">{formatDate(session.createdAt)}</span>
+                {isEdit && (
+                  <span className="ml-auto text-[9px] font-semibold uppercase tracking-wide text-amber-400/70 bg-amber-400/10 px-1 rounded">
+                    edit
+                  </span>
+                )}
               </div>
               <span className="pl-4 text-[11px] text-zinc-500">{formatTime(session.createdAt)}</span>
               <span className="pl-4 text-[11px] text-zinc-500">{formatBytes(session.size)}</span>
@@ -124,30 +127,26 @@ export function SessionsView() {
         })}
       </aside>
 
-      {/* Player */}
+      {/* Player / Editor */}
       <div className="flex flex-1 flex-col gap-3 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900/60 p-4">
-        {selected ? (
+        {selected && videoSrc ? (
           <>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-zinc-100">
                   {formatDate(selected.createdAt)} at {formatTime(selected.createdAt)}
                 </p>
-                <p className="text-xs text-zinc-500">{selected.filename} &middot; {formatBytes(selected.size)}</p>
+                <p className="text-xs text-zinc-500">
+                  {selected.filename} &middot; {formatBytes(selected.size)}
+                </p>
               </div>
             </div>
 
-            <div className="flex flex-1 items-center justify-center overflow-hidden rounded-md bg-black">
-              <video
-                ref={videoRef}
-                key={selected.path}
-                src={videoSrc}
-                controls
-                autoPlay
-                className="h-full w-full"
-                style={{ maxHeight: '100%' }}
-              />
-            </div>
+            <VideoEditorPanel
+              src={videoSrc}
+              filePath={selected.path}
+              onExportDone={handleExportDone}
+            />
           </>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-zinc-600">
