@@ -1,6 +1,9 @@
-import { app, BrowserWindow, protocol, net } from 'electron'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { app, BrowserWindow, protocol } from 'electron'
+import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { Readable } from 'node:stream'
 
 import { createGamePoller } from './gamePoller'
 import { registerIpcHandlers } from './ipcHandlers'
@@ -94,7 +97,7 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(() => {
-  protocol.handle('crux', (request) => {
+  protocol.handle('crux', async (request) => {
     const requestUrl = new URL(request.url);
     const queryPath = requestUrl.searchParams.get('path');
     const legacyRawPath = request.url.replace(/^crux:\/\//i, '');
@@ -102,9 +105,87 @@ app.whenReady().then(() => {
     if (process.platform === 'win32' && /^\/[a-zA-Z]:/.test(decodedPath)) {
       decodedPath = decodedPath.slice(1);
     }
-    const fileUrl = pathToFileURL(decodedPath).href;
+    const filePath = decodedPath
 
-    return net.fetch(fileUrl);
+    let fileSize = 0
+    try {
+      fileSize = (await stat(filePath)).size
+    } catch {
+      return new Response('Not found', { status: 404 })
+    }
+
+    const rangeHeader = request.headers.get('range')
+    const mimeType = path.extname(decodedPath).toLowerCase() === '.webm' ? 'video/webm' : 'application/octet-stream'
+
+    if (rangeHeader) {
+      const match = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader.trim())
+      if (!match) {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            'Content-Range': `bytes */${fileSize}`,
+            'Accept-Ranges': 'bytes',
+          },
+        })
+      }
+
+      const startText = match[1]
+      const endText = match[2]
+      let start = startText ? Number.parseInt(startText, 10) : 0
+      let end = endText ? Number.parseInt(endText, 10) : fileSize - 1
+
+      if (Number.isNaN(start) || Number.isNaN(end)) {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            'Content-Range': `bytes */${fileSize}`,
+            'Accept-Ranges': 'bytes',
+          },
+        })
+      }
+
+      if (!startText && endText) {
+        const suffixLength = Number.parseInt(endText, 10)
+        start = Math.max(fileSize - suffixLength, 0)
+        end = fileSize - 1
+      }
+
+      if (start > end || start >= fileSize) {
+        return new Response(null, {
+          status: 416,
+          headers: {
+            'Content-Range': `bytes */${fileSize}`,
+            'Accept-Ranges': 'bytes',
+          },
+        })
+      }
+
+      end = Math.min(end, fileSize - 1)
+      const contentLength = end - start + 1
+      const nodeStream = createReadStream(filePath, { start, end })
+
+      return new Response(Readable.toWeb(nodeStream) as ReadableStream, {
+        status: 206,
+        headers: {
+          'Content-Type': mimeType,
+          'Accept-Ranges': 'bytes',
+          'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+          'Content-Length': String(contentLength),
+          'Cache-Control': 'no-store',
+        },
+      })
+    }
+
+    const nodeStream = createReadStream(filePath)
+    return new Response(Readable.toWeb(nodeStream) as ReadableStream, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeType,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': String(fileSize),
+        'Cache-Control': 'no-store',
+      },
+    })
   })
   registerIpcHandlers()
   gamePoller.start()

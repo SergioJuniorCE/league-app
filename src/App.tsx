@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 
 import { Header } from './components/Header'
 import { RecorderView } from './screens/RecorderView'
@@ -16,6 +16,7 @@ function App() {
   const { isDark, toggle: toggleDark } = useDarkMode()
   const { recordingState, elapsedSeconds, lastSavedPath, errorMessage, startRecording, stopRecording } =
     useLeagueRecorder(settings)
+  const location = useLocation()
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -37,35 +38,50 @@ function App() {
     stopRecording()
   }, [gameActive, startRecording, stopRecording])
 
-  const settingsSummary = `${settings.resolution} @ ${settings.frameRate} FPS`
-
   return (
-    <main className="min-h-screen w-full bg-zinc-100 p-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-      <Header />
+    <div className="min-h-screen w-full bg-background text-foreground">
+      <Header
+        gameActive={gameActive}
+        recordingState={recordingState}
+        isDark={isDark}
+        onToggleDark={toggleDark}
+      />
 
-      <Routes>
-        <Route 
-          path="/" 
-          element={
-            <RecorderView
-              gameActive={gameActive}
-              recordingState={recordingState}
-              elapsedSeconds={elapsedSeconds}
-              lastSavedPath={lastSavedPath}
-              errorMessage={errorMessage}
-              settingsSummary={settingsSummary}
+      <main className="mx-auto max-w-6xl px-6 py-6">
+        <div
+          key={location.pathname}
+          className="animate-in fade-in-50 slide-in-from-bottom-1 duration-300"
+        >
+          <Routes location={location}>
+            <Route
+              path="/"
+              element={
+                <RecorderView
+                  gameActive={gameActive}
+                  recordingState={recordingState}
+                  elapsedSeconds={elapsedSeconds}
+                  lastSavedPath={lastSavedPath}
+                  errorMessage={errorMessage}
+                  settings={settings}
+                />
+              }
             />
-          } 
-        />
-        <Route 
-          path="/settings" 
-          element={
-            <SettingsView settings={settings} onSettingsChange={setSettings} isDark={isDark} onToggleDark={toggleDark} />
-          } 
-        />
-        <Route path="/sessions" element={<SessionsView />} />
-      </Routes>
-    </main>
+            <Route
+              path="/settings"
+              element={
+                <SettingsView
+                  settings={settings}
+                  onSettingsChange={setSettings}
+                  isDark={isDark}
+                  onToggleDark={toggleDark}
+                />
+              }
+            />
+            <Route path="/sessions" element={<SessionsView />} />
+          </Routes>
+        </div>
+      </main>
+    </div>
   )
 }
 
