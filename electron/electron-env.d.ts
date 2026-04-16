@@ -53,5 +53,8 @@ interface Window {
     getRecordings: () => Promise<RecordingSession[]>
     deleteRecording: (filePath: string) => Promise<boolean>
     exportRecording: (params: ExportParams) => Promise<ExportResult>
+    getRiotSummoner: (
+      params: import('../src/types/riot').RiotFetchParams,
+    ) => Promise<import('../src/types/riot').RiotFetchResult>
   }
 }

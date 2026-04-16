@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { Camera, HardDrive, Moon, Palette, Sun } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { Camera, ExternalLink, Eye, EyeOff, HardDrive, Moon, Palette, Sun, UserCircle2 } from 'lucide-react'
 
 import {
   FPS_OPTIONS,
@@ -9,11 +9,15 @@ import {
   type FrameRateOption,
 } from '../types/recorder'
 import { Segmented } from '../components/Segmented'
+import { PLATFORM_REGIONS, REGION_LABELS, type PlatformRegion } from '../types/riot'
+import type { RiotSettings } from '../hooks/useRiotSettings'
 import { cn } from '@/lib/utils'
 
 type SettingsViewProps = {
   settings: RecorderSettings
   onSettingsChange: (updater: (current: RecorderSettings) => RecorderSettings) => void
+  riotSettings: RiotSettings
+  onRiotSettingsChange: (updater: (current: RiotSettings) => RiotSettings) => void
   isDark: boolean
   onToggleDark: () => void
 }
@@ -68,9 +72,13 @@ function FieldRow({
 export function SettingsView({
   settings,
   onSettingsChange,
+  riotSettings,
+  onRiotSettingsChange,
   isDark,
   onToggleDark,
 }: SettingsViewProps) {
+  const [showApiKey, setShowApiKey] = useState(false)
+
   return (
     <div className="flex flex-col gap-4">
       <div>
@@ -79,6 +87,126 @@ export function SettingsView({
           Changes apply to the next recording session.
         </p>
       </div>
+
+      <SectionCard
+        icon={<UserCircle2 size={15} />}
+        title="Riot account"
+        description="Used to fetch your summoner profile, rank, and match history."
+      >
+        <div className="flex flex-col gap-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_120px]">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Game name
+              </span>
+              <input
+                type="text"
+                placeholder="Faker"
+                autoComplete="off"
+                spellCheck={false}
+                className="rounded-md border border-border bg-background/50 px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
+                value={riotSettings.gameName}
+                onChange={(event) =>
+                  onRiotSettingsChange((current) => ({
+                    ...current,
+                    gameName: event.target.value,
+                  }))
+                }
+              />
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Tagline
+              </span>
+              <div className="flex items-center rounded-md border border-border bg-background/50 pl-2 transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
+                <span className="font-mono text-sm text-muted-foreground">#</span>
+                <input
+                  type="text"
+                  placeholder="KR1"
+                  autoComplete="off"
+                  spellCheck={false}
+                  maxLength={5}
+                  className="w-full rounded-md bg-transparent px-1 py-2 font-mono text-sm uppercase text-foreground outline-none"
+                  value={riotSettings.tagLine}
+                  onChange={(event) =>
+                    onRiotSettingsChange((current) => ({
+                      ...current,
+                      tagLine: event.target.value.replace(/^#/, ''),
+                    }))
+                  }
+                />
+              </div>
+            </label>
+          </div>
+
+          <FieldRow
+            label="Region"
+            hint="Your summoner's platform routing value"
+          >
+            <select
+              className="rounded-md border border-border bg-background/50 px-3 py-2 text-sm text-foreground outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
+              value={riotSettings.platform}
+              onChange={(event) =>
+                onRiotSettingsChange((current) => ({
+                  ...current,
+                  platform: event.target.value as PlatformRegion,
+                }))
+              }
+            >
+              {PLATFORM_REGIONS.map((region) => (
+                <option key={region} value={region}>
+                  {REGION_LABELS[region]} ({region.toUpperCase()})
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              API key
+            </span>
+            <div className="flex items-center gap-2 rounded-md border border-border bg-background/50 pr-1 transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                placeholder="RGAPI-..."
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full bg-transparent px-3 py-2 font-mono text-sm text-foreground outline-none"
+                value={riotSettings.apiKey}
+                onChange={(event) =>
+                  onRiotSettingsChange((current) => ({
+                    ...current,
+                    apiKey: event.target.value.trim(),
+                  }))
+                }
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey((v) => !v)}
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+                title={showApiKey ? 'Hide API key' : 'Show API key'}
+                aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+              >
+                {showApiKey ? <EyeOff size={13} /> : <Eye size={13} />}
+              </button>
+            </div>
+            <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+              Get a development key from the
+              <a
+                href="https://developer.riotgames.com/"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-0.5 text-primary hover:underline"
+              >
+                Riot Developer Portal
+                <ExternalLink size={10} />
+              </a>
+              . Stored locally on this machine.
+            </span>
+          </label>
+        </div>
+      </SectionCard>
 
       <SectionCard
         icon={<Camera size={15} />}

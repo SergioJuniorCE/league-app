@@ -3,7 +3,9 @@ import { AlertTriangle, Clock, Gauge, HardDrive, Monitor, Save } from 'lucide-re
 
 import type { RecorderSettings, RecordingState } from '../types/recorder'
 import { StatCard } from '../components/StatCard'
+import { SummonerCard } from '../components/SummonerCard'
 import type { RecordingSession } from '../types/sessions'
+import type { RiotProfileBundle } from '../types/riot'
 import { cn } from '@/lib/utils'
 
 type RecorderViewProps = {
@@ -13,6 +15,12 @@ type RecorderViewProps = {
   lastSavedPath: string | null
   errorMessage: string | null
   settings: RecorderSettings
+  summonerStatus: 'idle' | 'loading' | 'success' | 'error'
+  summonerData: RiotProfileBundle | null
+  summonerError: string | null
+  summonerConfigured: boolean
+  onRefreshSummoner: () => void
+  onOpenRiotSettings: () => void
 }
 
 function formatTimer(seconds: number) {
@@ -46,6 +54,12 @@ export function RecorderView({
   lastSavedPath,
   errorMessage,
   settings,
+  summonerStatus,
+  summonerData,
+  summonerError,
+  summonerConfigured,
+  onRefreshSummoner,
+  onOpenRiotSettings,
 }: RecorderViewProps) {
   const isRecording = recordingState === 'recording'
   const isSaving = recordingState === 'saving'
@@ -135,6 +149,16 @@ export function RecorderView({
           </div>
         </div>
       </section>
+
+      {/* Summoner profile */}
+      <SummonerCard
+        status={summonerStatus}
+        data={summonerData}
+        error={summonerError}
+        configured={summonerConfigured}
+        onRefresh={onRefreshSummoner}
+        onGoToSettings={onOpenRiotSettings}
+      />
 
       {/* Error strip */}
       {errorMessage && (

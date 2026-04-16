@@ -29,6 +29,18 @@ type ExportResult = {
   error?: string
 }
 
+type RiotFetchParams = {
+  platform: string
+  gameName: string
+  tagLine: string
+  apiKey: string
+  matchCount?: number
+}
+
+type RiotFetchResult =
+  | { success: true; data: unknown }
+  | { success: false; error: string; status?: number }
+
 contextBridge.exposeInMainWorld('electronAPI', {
   onGameStatus(listener: (payload: GameStatusPayload) => void) {
     const wrappedListener = (_event: Electron.IpcRendererEvent, payload: GameStatusPayload) => {
@@ -54,5 +66,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   exportRecording(params: ExportParams) {
     return ipcRenderer.invoke('export-recording', params) as Promise<ExportResult>
+  },
+  getRiotSummoner(params: RiotFetchParams) {
+    return ipcRenderer.invoke('riot-get-summoner', params) as Promise<RiotFetchResult>
   },
 })

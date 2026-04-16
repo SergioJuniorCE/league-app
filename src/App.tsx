@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, useLocation } from 'react-router-dom'
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom'
 
 import { Header } from './components/Header'
 import { RecorderView } from './screens/RecorderView'
@@ -8,15 +8,20 @@ import { SessionsView } from './screens/SessionsView'
 import { useGameStatus } from './hooks/useGameStatus'
 import { useLeagueRecorder } from './hooks/useLeagueRecorder'
 import { useRecorderSettings } from './hooks/useRecorderSettings'
+import { useRiotSettings, isRiotConfigured } from './hooks/useRiotSettings'
+import { useSummoner } from './hooks/useSummoner'
 import { useDarkMode } from './hooks/useDarkMode'
 
 function App() {
   const gameActive = useGameStatus()
   const { settings, setSettings } = useRecorderSettings()
+  const { settings: riotSettings, setSettings: setRiotSettings } = useRiotSettings()
   const { isDark, toggle: toggleDark } = useDarkMode()
   const { recordingState, elapsedSeconds, lastSavedPath, errorMessage, startRecording, stopRecording } =
     useLeagueRecorder(settings)
+  const summoner = useSummoner(riotSettings)
   const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -63,6 +68,12 @@ function App() {
                   lastSavedPath={lastSavedPath}
                   errorMessage={errorMessage}
                   settings={settings}
+                  summonerStatus={summoner.status}
+                  summonerData={summoner.data}
+                  summonerError={summoner.error}
+                  summonerConfigured={isRiotConfigured(riotSettings)}
+                  onRefreshSummoner={() => void summoner.refetch()}
+                  onOpenRiotSettings={() => navigate('/settings')}
                 />
               }
             />
@@ -72,6 +83,8 @@ function App() {
                 <SettingsView
                   settings={settings}
                   onSettingsChange={setSettings}
+                  riotSettings={riotSettings}
+                  onRiotSettingsChange={setRiotSettings}
                   isDark={isDark}
                   onToggleDark={toggleDark}
                 />

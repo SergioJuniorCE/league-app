@@ -4,6 +4,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 
 import { formatTimestamp } from './utils'
+import { getSummonerBundle, type PlatformRegion, type RiotProfileBundle } from './riotApi'
 
 const require = createRequire(import.meta.url)
 const ffmpeg = require('fluent-ffmpeg') as typeof import('fluent-ffmpeg')
@@ -226,6 +227,44 @@ export function registerIpcHandlers() {
       return false
     }
   })
+
+  ipcMain.handle(
+    'riot-get-summoner',
+    async (
+      _event,
+      params: {
+        platform: PlatformRegion
+        gameName: string
+        tagLine: string
+        apiKey: string
+        matchCount?: number
+      },
+    ): Promise<
+      { success: true; data: RiotProfileBundle } | { success: false; error: string; status?: number }
+    > => {
+      const { platform, gameName, tagLine, apiKey, matchCount } = params
+
+      if (!apiKey) {
+        return { success: false, error: 'Missing Riot API key.' }
+      }
+      if (!gameName || !tagLine) {
+        return { success: false, error: 'Missing Riot ID (gameName#tagLine).' }
+      }
+
+      try {
+        const data = await getSummonerBundle(platform, gameName, tagLine, apiKey, matchCount ?? 5)
+        return { success: true, data }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        const status =
+          typeof err === 'object' && err !== null && 'status' in err
+            ? Number((err as { status: number }).status)
+            : undefined
+        console.error('Riot API error:', message)
+        return { success: false, error: message, status }
+      }
+    },
+  )
 
   ipcMain.handle('export-recording', async (_event, params: ExportParams): Promise<ExportResult> => {
     const { sourcePath, startSec, endSec, speedMultiplier } = params
