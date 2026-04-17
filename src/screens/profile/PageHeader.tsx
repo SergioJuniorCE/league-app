@@ -1,0 +1,37 @@
+import { ArrowLeft } from 'lucide-react'
+
+export function PageHeader({
+  right,
+  isViewingOther = false,
+  onBackToOwn,
+}: {
+  right?: React.ReactNode
+  isViewingOther?: boolean
+  onBackToOwn?: () => void
+}) {
+  return (
+    <div className="flex items-end justify-between gap-4">
+      <div>
+        {isViewingOther && onBackToOwn && (
+          <button
+            type="button"
+            onClick={onBackToOwn}
+            className="mb-1.5 inline-flex items-center gap-1 rounded-md text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft size={11} />
+            Back to my profile
+          </button>
+        )}
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          {isViewingOther ? 'Player profile' : 'Profile'}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {isViewingOther
+            ? 'Viewing another summoner. Click any player in a match to jump to their profile.'
+            : 'Your Riot account, ranked standings, and recent matches.'}
+        </p>
+      </div>
+      {right}
+    </div>
+  )
+}

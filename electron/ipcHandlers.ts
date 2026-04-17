@@ -4,6 +4,8 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 
 import { formatTimestamp } from './utils'
+import { getSummonerBundle, type PlatformRegion, type RiotProfileBundle } from './riotApi'
+import { getCurrentSummonerFromClient, type CurrentSummonerPayload } from './lcuClient'
 
 const require = createRequire(import.meta.url)
 const ffmpeg = require('fluent-ffmpeg') as typeof import('fluent-ffmpeg')
@@ -226,6 +228,67 @@ export function registerIpcHandlers() {
       return false
     }
   })
+
+  ipcMain.handle('riot-env-status', async (): Promise<{ hasEnvKey: boolean }> => {
+    return { hasEnvKey: Boolean(process.env.RIOT_API_KEY?.trim()) }
+  })
+
+  ipcMain.handle(
+    'lcu-get-current-summoner',
+    async (): Promise<
+      { success: true; data: CurrentSummonerPayload } | { success: false; error: string }
+    > => {
+      try {
+        const data = await getCurrentSummonerFromClient()
+        return { success: true, data }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return { success: false, error: message }
+      }
+    },
+  )
+
+  ipcMain.handle(
+    'riot-get-summoner',
+    async (
+      _event,
+      params: {
+        platform: PlatformRegion
+        gameName: string
+        tagLine: string
+        apiKey?: string
+        matchCount?: number
+      },
+    ): Promise<
+      { success: true; data: RiotProfileBundle } | { success: false; error: string; status?: number }
+    > => {
+      const { platform, gameName, tagLine, matchCount } = params
+
+      // Prefer the renderer-provided key when present so users can override
+      // whatever lives in .env without a restart. Fall back to the env var.
+      const apiKey = params.apiKey?.trim() || process.env.RIOT_API_KEY?.trim() || ''
+
+      if (!apiKey) {
+        return { success: false, error: 'Missing Riot API key. Set RIOT_API_KEY in .env or enter one in Settings.' }
+      }
+      if (!gameName || !tagLine) {
+        return { success: false, error: 'Missing Riot ID (gameName#tagLine).' }
+      }
+
+      try {
+        const data = await getSummonerBundle(platform, gameName, tagLine, apiKey, matchCount ?? 5)
+        return { success: true, data }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        const status =
+          typeof err === 'object' && err !== null && 'status' in err
+            ? Number((err as { status: number }).status)
+            : undefined
+        console.error('Riot API error:', message)
+        return { success: false, error: message, status }
+      }
+    },
+  )
 
   ipcMain.handle('export-recording', async (_event, params: ExportParams): Promise<ExportResult> => {
     const { sourcePath, startSec, endSec, speedMultiplier } = params

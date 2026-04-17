@@ -29,6 +29,22 @@ type ExportResult = {
   error?: string
 }
 
+type RiotFetchParams = {
+  platform: string
+  gameName: string
+  tagLine: string
+  apiKey?: string
+  matchCount?: number
+}
+
+type RiotFetchResult =
+  | { success: true; data: unknown }
+  | { success: false; error: string; status?: number }
+
+type LcuCurrentSummonerResult =
+  | { success: true; data: unknown }
+  | { success: false; error: string }
+
 contextBridge.exposeInMainWorld('electronAPI', {
   onGameStatus(listener: (payload: GameStatusPayload) => void) {
     const wrappedListener = (_event: Electron.IpcRendererEvent, payload: GameStatusPayload) => {
@@ -54,5 +70,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   exportRecording(params: ExportParams) {
     return ipcRenderer.invoke('export-recording', params) as Promise<ExportResult>
+  },
+  getRiotSummoner(params: RiotFetchParams) {
+    return ipcRenderer.invoke('riot-get-summoner', params) as Promise<RiotFetchResult>
+  },
+  getRiotEnvStatus() {
+    return ipcRenderer.invoke('riot-env-status') as Promise<{ hasEnvKey: boolean }>
+  },
+  getCurrentSummonerFromClient() {
+    return ipcRenderer.invoke('lcu-get-current-summoner') as Promise<LcuCurrentSummonerResult>
   },
 })
