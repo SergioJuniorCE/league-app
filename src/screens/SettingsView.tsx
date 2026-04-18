@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   Camera,
@@ -13,7 +13,7 @@ import {
   Sparkles,
   Sun,
   UserCircle2,
-} from 'lucide-react'
+} from "lucide-react";
 
 import {
   FPS_OPTIONS,
@@ -21,21 +21,30 @@ import {
   type RecorderSettings,
   type ResolutionOption,
   type FrameRateOption,
-} from '../types/recorder'
-import { Segmented } from '../components/Segmented'
-import { PLATFORM_REGIONS, REGION_LABELS, type PlatformRegion } from '../types/riot'
-import type { RiotSettings } from '../hooks/useRiotSettings'
-import { cn } from '@/lib/utils'
+} from "../types/recorder";
+import { Segmented } from "../components/Segmented";
+import {
+  PLATFORM_REGIONS,
+  REGION_LABELS,
+  type PlatformRegion,
+} from "../types/riot";
+import type { RiotSettings } from "../hooks/useRiotSettings";
+import { cn } from "@/lib/utils";
+import { useErrorToast } from "@/hooks/useErrorToast";
 
 type SettingsViewProps = {
-  settings: RecorderSettings
-  onSettingsChange: (updater: (current: RecorderSettings) => RecorderSettings) => void
-  riotSettings: RiotSettings
-  onRiotSettingsChange: (updater: (current: RiotSettings) => RiotSettings) => void
-  hasEnvRiotKey: boolean
-  isDark: boolean
-  onToggleDark: () => void
-}
+  settings: RecorderSettings;
+  onSettingsChange: (
+    updater: (current: RecorderSettings) => RecorderSettings,
+  ) => void;
+  riotSettings: RiotSettings;
+  onRiotSettingsChange: (
+    updater: (current: RiotSettings) => RiotSettings,
+  ) => void;
+  hasEnvRiotKey: boolean;
+  isDark: boolean;
+  onToggleDark: () => void;
+};
 
 function SectionCard({
   icon,
@@ -43,10 +52,10 @@ function SectionCard({
   description,
   children,
 }: {
-  icon: ReactNode
-  title: string
-  description: string
-  children: ReactNode
+  icon: ReactNode;
+  title: string;
+  description: string;
+  children: ReactNode;
 }) {
   return (
     <section className="rounded-xl border border-border bg-card p-5">
@@ -61,7 +70,7 @@ function SectionCard({
       </header>
       <div className="pt-4">{children}</div>
     </section>
-  )
+  );
 }
 
 function FieldRow({
@@ -69,9 +78,9 @@ function FieldRow({
   hint,
   children,
 }: {
-  label: string
-  hint?: string
-  children: ReactNode
+  label: string;
+  hint?: string;
+  children: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
@@ -81,7 +90,7 @@ function FieldRow({
       </div>
       <div className="shrink-0">{children}</div>
     </div>
-  )
+  );
 }
 
 export function SettingsView({
@@ -93,41 +102,53 @@ export function SettingsView({
   isDark,
   onToggleDark,
 }: SettingsViewProps) {
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [detecting, setDetecting] = useState(false)
-  const [detectError, setDetectError] = useState<string | null>(null)
-  const [detectSuccessAt, setDetectSuccessAt] = useState<number | null>(null)
-  const hasUiKey = Boolean(riotSettings.apiKey)
-  const envKeyActive = hasEnvRiotKey && !hasUiKey
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [detectError, setDetectError] = useState<string | null>(null);
+  const [detectSuccessAt, setDetectSuccessAt] = useState<number | null>(null);
+  const hasUiKey = Boolean(riotSettings.apiKey);
+  const envKeyActive = hasEnvRiotKey && !hasUiKey;
+
+  useErrorToast({
+    error: detectError,
+    title: "Could not detect League client",
+  });
 
   const handleDetectFromClient = async () => {
-    setDetecting(true)
-    setDetectError(null)
+    setDetecting(true);
+    setDetectError(null);
     try {
-      const result = await window.electronAPI.getCurrentSummonerFromClient()
+      const result = await window.electronAPI.getCurrentSummonerFromClient();
       if (result.success) {
-        const { summoner, platform } = result.data
+        const { summoner, platform } = result.data;
         onRiotSettingsChange((current) => ({
           ...current,
-          gameName: summoner.gameName || summoner.displayName || current.gameName,
+          gameName:
+            summoner.gameName || summoner.displayName || current.gameName,
           tagLine: summoner.tagLine || current.tagLine,
           platform: platform ?? current.platform,
-        }))
-        setDetectSuccessAt(Date.now())
+        }));
+        setDetectSuccessAt(Date.now());
       } else {
-        setDetectError(result.error)
+        setDetectError(result.error);
       }
     } catch (err) {
-      setDetectError(err instanceof Error ? err.message : String(err))
+      setDetectError(err instanceof Error ? err.message : String(err));
     } finally {
-      setDetecting(false)
+      setDetecting(false);
     }
-  }
+  };
+
+  useEffect(() => {
+    if (!detectSuccessAt) return;
+  }, [detectSuccessAt]);
 
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">Settings</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          Settings
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Changes apply to the next recording session.
         </p>
@@ -146,9 +167,12 @@ export function SettingsView({
                 <Sparkles size={13} />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">Detect from League client</p>
+                <p className="text-sm font-medium text-foreground">
+                  Detect from League client
+                </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  Reads your Riot ID and region directly from the running game client — no API key needed.
+                  Reads your Riot ID and region directly from the running game
+                  client — no API key needed.
                 </p>
               </div>
               <button
@@ -210,7 +234,9 @@ export function SettingsView({
                 Tagline
               </span>
               <div className="flex items-center rounded-md border border-border bg-background/50 pl-2 transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
-                <span className="font-mono text-sm text-muted-foreground">#</span>
+                <span className="font-mono text-sm text-muted-foreground">
+                  #
+                </span>
                 <input
                   type="text"
                   placeholder="KR1"
@@ -222,7 +248,7 @@ export function SettingsView({
                   onChange={(event) =>
                     onRiotSettingsChange((current) => ({
                       ...current,
-                      tagLine: event.target.value.replace(/^#/, ''),
+                      tagLine: event.target.value.replace(/^#/, ""),
                     }))
                   }
                 />
@@ -269,8 +295,10 @@ export function SettingsView({
             </span>
             <div className="flex items-center gap-2 rounded-md border border-border bg-background/50 pr-1 transition-colors focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20">
               <input
-                type={showApiKey ? 'text' : 'password'}
-                placeholder={envKeyActive ? 'Using RIOT_API_KEY from .env' : 'RGAPI-...'}
+                type={showApiKey ? "text" : "password"}
+                placeholder={
+                  envKeyActive ? "Using RIOT_API_KEY from .env" : "RGAPI-..."
+                }
                 autoComplete="off"
                 spellCheck={false}
                 className="w-full bg-transparent px-3 py-2 font-mono text-sm text-foreground outline-none placeholder:text-muted-foreground/60"
@@ -286,8 +314,8 @@ export function SettingsView({
                 type="button"
                 onClick={() => setShowApiKey((v) => !v)}
                 className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
-                title={showApiKey ? 'Hide API key' : 'Show API key'}
-                aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                title={showApiKey ? "Hide API key" : "Show API key"}
+                aria-label={showApiKey ? "Hide API key" : "Show API key"}
               >
                 {showApiKey ? <EyeOff size={13} /> : <Eye size={13} />}
               </button>
@@ -295,9 +323,15 @@ export function SettingsView({
             <span className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
               {envKeyActive ? (
                 <>
-                  Using <code className="rounded bg-white/[0.05] px-1 py-0.5 font-mono text-[10.5px] text-foreground/80">RIOT_API_KEY</code>
-                  from your <code className="rounded bg-white/[0.05] px-1 py-0.5 font-mono text-[10.5px] text-foreground/80">.env</code>.
-                  Enter a key above to override.
+                  Using{" "}
+                  <code className="rounded bg-white/[0.05] px-1 py-0.5 font-mono text-[10.5px] text-foreground/80">
+                    RIOT_API_KEY
+                  </code>
+                  from your{" "}
+                  <code className="rounded bg-white/[0.05] px-1 py-0.5 font-mono text-[10.5px] text-foreground/80">
+                    .env
+                  </code>
+                  . Enter a key above to override.
                 </>
               ) : (
                 <>
@@ -311,8 +345,15 @@ export function SettingsView({
                     Riot Developer Portal
                     <ExternalLink size={10} />
                   </a>
-                  . Or set <code className="rounded bg-white/[0.05] px-1 py-0.5 font-mono text-[10.5px] text-foreground/80">RIOT_API_KEY</code> in a
-                  <code className="rounded bg-white/[0.05] px-1 py-0.5 font-mono text-[10.5px] text-foreground/80">.env</code> file at the project root.
+                  . Or set{" "}
+                  <code className="rounded bg-white/[0.05] px-1 py-0.5 font-mono text-[10.5px] text-foreground/80">
+                    RIOT_API_KEY
+                  </code>{" "}
+                  in a
+                  <code className="rounded bg-white/[0.05] px-1 py-0.5 font-mono text-[10.5px] text-foreground/80">
+                    .env
+                  </code>{" "}
+                  file at the project root.
                 </>
               )}
             </span>
@@ -331,17 +372,26 @@ export function SettingsView({
               options={RESOLUTION_OPTIONS.map((r) => ({ value: r, label: r }))}
               value={settings.resolution}
               onChange={(value) =>
-                onSettingsChange((current) => ({ ...current, resolution: value }))
+                onSettingsChange((current) => ({
+                  ...current,
+                  resolution: value,
+                }))
               }
             />
           </FieldRow>
 
           <FieldRow label="Frame rate" hint="Frames captured per second">
             <Segmented<FrameRateOption>
-              options={FPS_OPTIONS.map((f) => ({ value: f, label: `${f} fps` }))}
+              options={FPS_OPTIONS.map((f) => ({
+                value: f,
+                label: `${f} fps`,
+              }))}
               value={settings.frameRate}
               onChange={(value) =>
-                onSettingsChange((current) => ({ ...current, frameRate: value }))
+                onSettingsChange((current) => ({
+                  ...current,
+                  frameRate: value,
+                }))
               }
             />
           </FieldRow>
@@ -365,9 +415,15 @@ export function SettingsView({
               className="rounded-md border border-border bg-background/50 px-3 py-2 font-mono text-sm tabular-nums text-foreground outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
               value={settings.maxVideoCount}
               onChange={(event) => {
-                const value = Math.max(1, Math.floor(Number(event.target.value)))
+                const value = Math.max(
+                  1,
+                  Math.floor(Number(event.target.value)),
+                );
                 if (!Number.isNaN(value)) {
-                  onSettingsChange((current) => ({ ...current, maxVideoCount: value }))
+                  onSettingsChange((current) => ({
+                    ...current,
+                    maxVideoCount: value,
+                  }));
                 }
               }}
             />
@@ -384,9 +440,12 @@ export function SettingsView({
               className="rounded-md border border-border bg-background/50 px-3 py-2 font-mono text-sm tabular-nums text-foreground outline-none transition-colors focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
               value={settings.maxFolderSizeGB}
               onChange={(event) => {
-                const value = Number(event.target.value)
+                const value = Number(event.target.value);
                 if (!Number.isNaN(value) && value > 0) {
-                  onSettingsChange((current) => ({ ...current, maxFolderSizeGB: value }))
+                  onSettingsChange((current) => ({
+                    ...current,
+                    maxFolderSizeGB: value,
+                  }));
                 }
               }}
             />
@@ -406,14 +465,14 @@ export function SettingsView({
             role="switch"
             aria-checked={isDark}
             className={cn(
-              'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-              isDark ? 'bg-primary' : 'bg-white/10',
+              "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              isDark ? "bg-primary" : "bg-white/10",
             )}
           >
             <span
               className={cn(
-                'inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-background shadow transition-transform',
-                isDark ? 'translate-x-5' : 'translate-x-0.5',
+                "inline-flex h-5 w-5 transform items-center justify-center rounded-full bg-background shadow transition-transform",
+                isDark ? "translate-x-5" : "translate-x-0.5",
               )}
             >
               {isDark ? (
@@ -426,5 +485,5 @@ export function SettingsView({
         </FieldRow>
       </SectionCard>
     </div>
-  )
+  );
 }

@@ -1,50 +1,59 @@
-import { useEffect, useState } from 'react'
-import { AlertTriangle, Clock, Gauge, HardDrive, Monitor, Save } from 'lucide-react'
+import { useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  Clock,
+  Gauge,
+  HardDrive,
+  Monitor,
+  Save,
+} from "lucide-react";
 
-import type { RecorderSettings, RecordingState } from '../types/recorder'
-import { StatCard } from '../components/StatCard'
-import { SummonerCard } from '../components/SummonerCard'
-import type { RecordingSession } from '../types/sessions'
-import type { RiotProfileBundle } from '../types/riot'
-import { cn } from '@/lib/utils'
+import type { RecorderSettings, RecordingState } from "../types/recorder";
+import { StatCard } from "../components/StatCard";
+import { SummonerCard } from "../components/SummonerCard";
+import type { RecordingSession } from "../types/sessions";
+import type { RiotProfileBundle } from "../types/riot";
+import { useErrorToast } from "@/hooks/useErrorToast";
+import { cn } from "@/lib/utils";
 
 type RecorderViewProps = {
-  gameActive: boolean
-  recordingState: RecordingState
-  elapsedSeconds: number
-  lastSavedPath: string | null
-  errorMessage: string | null
-  settings: RecorderSettings
-  summonerStatus: 'idle' | 'loading' | 'success' | 'error'
-  summonerData: RiotProfileBundle | null
-  summonerError: string | null
-  summonerConfigured: boolean
-  onRefreshSummoner: () => void
-  onOpenRiotSettings: () => void
-}
+  gameActive: boolean;
+  recordingState: RecordingState;
+  elapsedSeconds: number;
+  lastSavedPath: string | null;
+  errorMessage: string | null;
+  settings: RecorderSettings;
+  summonerStatus: "idle" | "loading" | "success" | "error";
+  summonerData: RiotProfileBundle | null;
+  summonerError: string | null;
+  summonerConfigured: boolean;
+  onRefreshSummoner: () => void;
+  onOpenRiotSettings: () => void;
+};
 
 function formatTimer(seconds: number) {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = Math.floor(seconds % 60)
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
   if (h > 0) {
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 function basename(p: string | null | undefined) {
-  if (!p) return null
-  const norm = p.replace(/\\/g, '/')
-  const i = norm.lastIndexOf('/')
-  return i >= 0 ? norm.slice(i + 1) : norm
+  if (!p) return null;
+  const norm = p.replace(/\\/g, "/");
+  const i = norm.lastIndexOf("/");
+  return i >= 0 ? norm.slice(i + 1) : norm;
 }
 
 function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024)
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 export function RecorderView({
@@ -61,54 +70,69 @@ export function RecorderView({
   onRefreshSummoner,
   onOpenRiotSettings,
 }: RecorderViewProps) {
-  const isRecording = recordingState === 'recording'
-  const isSaving = recordingState === 'saving'
+  const isRecording = recordingState === "recording";
+  const isSaving = recordingState === "saving";
   const heroLabel = isRecording
-    ? 'Recording active match'
+    ? "Recording active match"
     : isSaving
-      ? 'Saving last recording'
+      ? "Saving last recording"
       : gameActive
-        ? 'Game detected'
-        : 'Waiting for a match'
+        ? "Game detected"
+        : "Waiting for a match";
 
   const heroSub = isRecording
-    ? 'Capturing gameplay. Recording will stop and save automatically when the game ends.'
+    ? "Capturing gameplay. Recording will stop and save automatically when the game ends."
     : isSaving
-      ? 'Encoding and writing the video file to disk.'
+      ? "Encoding and writing the video file to disk."
       : gameActive
-        ? 'Client is in an active match. Starting capture shortly.'
-        : 'Crux is listening. Start a League of Legends match to begin recording.'
+        ? "Client is in an active match. Starting capture shortly."
+        : "Crux is listening. Start a League of Legends match to begin recording.";
 
   const dotClass = isRecording
-    ? 'bg-red-500 crux-pulse-red'
+    ? "bg-red-500 crux-pulse-red"
     : gameActive
-      ? 'bg-primary crux-pulse-gold'
-      : 'bg-zinc-500'
+      ? "bg-primary crux-pulse-gold"
+      : "bg-zinc-500";
 
   const [stats, setStats] = useState<{ count: number; totalBytes: number }>({
     count: 0,
     totalBytes: 0,
-  })
+  });
+
+  useErrorToast({
+    error: errorMessage,
+    title: "Recorder error",
+  });
+
+  useErrorToast({
+    error: summonerError,
+    title: "Could not load recorder profile",
+    enabled: summonerStatus === "error",
+  });
 
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
     const load = async () => {
       try {
-        const recordings: RecordingSession[] = await window.electronAPI.getRecordings()
-        if (cancelled) return
-        const totalBytes = recordings.reduce((acc, r) => acc + (r.size ?? 0), 0)
-        setStats({ count: recordings.length, totalBytes })
+        const recordings: RecordingSession[] =
+          await window.electronAPI.getRecordings();
+        if (cancelled) return;
+        const totalBytes = recordings.reduce(
+          (acc, r) => acc + (r.size ?? 0),
+          0,
+        );
+        setStats({ count: recordings.length, totalBytes });
       } catch {
         // ignore
       }
-    }
-    void load()
+    };
+    void load();
     return () => {
-      cancelled = true
-    }
-  }, [recordingState, lastSavedPath])
+      cancelled = true;
+    };
+  }, [recordingState, lastSavedPath]);
 
-  const lastSavedName = basename(lastSavedPath)
+  const lastSavedName = basename(lastSavedPath);
 
   return (
     <div className="flex flex-col gap-4">
@@ -116,18 +140,29 @@ export function RecorderView({
       <section className="relative overflow-hidden rounded-xl border border-border bg-card p-6">
         <div
           className={cn(
-            'pointer-events-none absolute inset-x-0 top-0 h-px',
-            isRecording ? 'bg-red-500/60' : gameActive ? 'bg-primary/60' : 'bg-white/10',
+            "pointer-events-none absolute inset-x-0 top-0 h-px",
+            isRecording
+              ? "bg-red-500/60"
+              : gameActive
+                ? "bg-primary/60"
+                : "bg-white/10",
           )}
         />
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
-            <span className={cn('mt-1.5 inline-block h-2.5 w-2.5 rounded-full', dotClass)} />
+            <span
+              className={cn(
+                "mt-1.5 inline-block h-2.5 w-2.5 rounded-full",
+                dotClass,
+              )}
+            />
             <div>
               <h1 className="text-[22px] font-semibold tracking-tight text-foreground">
                 {heroLabel}
               </h1>
-              <p className="mt-1 max-w-xl text-sm text-muted-foreground">{heroSub}</p>
+              <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                {heroSub}
+              </p>
             </div>
           </div>
 
@@ -137,14 +172,14 @@ export function RecorderView({
             </span>
             <span
               className={cn(
-                'mt-1 font-mono text-4xl font-semibold tabular-nums leading-none',
-                isRecording ? 'text-red-400' : 'text-foreground/80',
+                "mt-1 font-mono text-4xl font-semibold tabular-nums leading-none",
+                isRecording ? "text-red-400" : "text-foreground/80",
               )}
             >
               {formatTimer(isRecording ? elapsedSeconds : 0)}
             </span>
             <span className="mt-1 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
-              {recordingState === 'idle' ? 'standby' : recordingState}
+              {recordingState === "idle" ? "standby" : recordingState}
             </span>
           </div>
         </div>
@@ -184,15 +219,15 @@ export function RecorderView({
         />
         <StatCard
           label="Last save"
-          value={lastSavedName ?? '—'}
-          sub={lastSavedName ? 'Most recent recording' : 'No saves yet'}
+          value={lastSavedName ?? "—"}
+          sub={lastSavedName ? "Most recent recording" : "No saves yet"}
           icon={<Save size={13} />}
           valueClassName="text-sm font-medium font-sans"
         />
         <StatCard
           label="Storage"
           value={formatBytes(stats.totalBytes)}
-          sub={`${stats.count} ${stats.count === 1 ? 'recording' : 'recordings'}`}
+          sub={`${stats.count} ${stats.count === 1 ? "recording" : "recordings"}`}
           icon={<HardDrive size={13} />}
         />
       </div>
@@ -200,11 +235,14 @@ export function RecorderView({
       {/* Info line */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Clock size={12} />
-        <span>Recording only runs during an active match — the client alone will not trigger capture.</span>
+        <span>
+          Recording only runs during an active match — the client alone will not
+          trigger capture.
+        </span>
       </div>
 
       {/* Last saved path, if any */}
-      {lastSavedPath && recordingState === 'saved' && (
+      {lastSavedPath && recordingState === "saved" && (
         <div className="rounded-md border border-border bg-card px-3 py-2">
           <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
             Saved to
@@ -215,5 +253,5 @@ export function RecorderView({
         </div>
       )}
     </div>
-  )
+  );
 }

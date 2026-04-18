@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState } from "react";
 import {
   AlertCircle,
   Filter,
@@ -8,54 +8,59 @@ import {
   Sword,
   Trophy,
   UserCircle2,
-} from 'lucide-react'
+} from "lucide-react";
 
-import type { RiotProfileBundle } from '../types/riot'
-import { REGION_LABELS, type PlatformRegion } from '../types/riot'
-import { PlayerSearch } from '@/components/PlayerSearch'
+import type { RiotProfileBundle } from "../types/riot";
+import { REGION_LABELS, type PlatformRegion } from "../types/riot";
+import { PlayerSearch } from "@/components/PlayerSearch";
+import { useErrorToast } from "@/hooks/useErrorToast";
 import {
   QUEUE_FILTERS,
   ddragonProfileIcon,
   queueGroup,
   type QueueGroup,
-} from '@/lib/leagueAssets'
-import { cn } from '@/lib/utils'
+} from "@/lib/leagueAssets";
+import { cn } from "@/lib/utils";
 
-import { aggregate } from './profile/aggregate'
-import { ChampionsPanel } from './profile/ChampionsPanel'
-import { MatchRow } from './profile/MatchRow'
-import { PageHeader } from './profile/PageHeader'
-import { EmptyRankedPanel, RankedPanel } from './profile/RankedPanel'
-import { RolesPanel } from './profile/RolesPanel'
-import { Skeleton } from './profile/Skeleton'
-import { SummaryCard } from './profile/SummaryCard'
-import { WinLossTrend } from './profile/WinLossTrend'
-import { findSelf, relativeTime } from './profile/utils'
+import { aggregate } from "./profile/aggregate";
+import { ChampionsPanel } from "./profile/ChampionsPanel";
+import { MatchRow } from "./profile/MatchRow";
+import { PageHeader } from "./profile/PageHeader";
+import { EmptyRankedPanel, RankedPanel } from "./profile/RankedPanel";
+import { RolesPanel } from "./profile/RolesPanel";
+import { Skeleton } from "./profile/Skeleton";
+import { SummaryCard } from "./profile/SummaryCard";
+import { WinLossTrend } from "./profile/WinLossTrend";
+import { findSelf, relativeTime } from "./profile/utils";
 
 type ProfileViewProps = {
-  status: 'idle' | 'loading' | 'success' | 'error'
-  data: RiotProfileBundle | null
-  error: string | null
-  configured: boolean
-  platform: PlatformRegion
-  clientLive: boolean
+  status: "idle" | "loading" | "success" | "error";
+  data: RiotProfileBundle | null;
+  error: string | null;
+  configured: boolean;
+  hasIdentity: boolean;
+  hasApiAccess: boolean;
+  platform: PlatformRegion;
+  clientLive: boolean;
   /** True when this view is showing another player's profile (not the signed-in user). */
-  isViewingOther?: boolean
+  isViewingOther?: boolean;
   /** Riot ID of the signed-in user; used to avoid linking your own row to yourself. */
-  ownIdentity?: { gameName: string; tagLine: string }
-  onRefresh: () => void
-  onOpenSettings: () => void
+  ownIdentity?: { gameName: string; tagLine: string };
+  onRefresh: () => void;
+  onOpenSettings: () => void;
   /** Navigate to another player's profile page. */
-  onSelectPlayer?: (gameName: string, tagLine: string) => void
+  onSelectPlayer?: (gameName: string, tagLine: string) => void;
   /** Return to the signed-in user's profile from the "other player" view. */
-  onBackToOwn?: () => void
-}
+  onBackToOwn?: () => void;
+};
 
 export function ProfileView({
   status,
   data,
   error,
   configured,
+  hasIdentity,
+  hasApiAccess,
   platform,
   clientLive,
   isViewingOther = false,
@@ -65,23 +70,33 @@ export function ProfileView({
   onSelectPlayer,
   onBackToOwn,
 }: ProfileViewProps) {
-  const [queueFilter, setQueueFilter] = useState<QueueGroup | 'all'>('all')
+  const [queueFilter, setQueueFilter] = useState<QueueGroup | "all">("all");
+
+  useErrorToast({
+    error,
+    title: isViewingOther
+      ? "Could not load player profile"
+      : "Could not load your profile",
+    enabled: status === "error",
+  });
 
   const allStats = useMemo(
     () => (data ? aggregate(data.matches, data.account.puuid) : null),
     [data],
-  )
+  );
 
   const filteredMatches = useMemo(() => {
-    if (!data) return []
-    if (queueFilter === 'all') return data.matches
-    return data.matches.filter((m) => queueGroup(m.info.queueId) === queueFilter)
-  }, [data, queueFilter])
+    if (!data) return [];
+    if (queueFilter === "all") return data.matches;
+    return data.matches.filter(
+      (m) => queueGroup(m.info.queueId) === queueFilter,
+    );
+  }, [data, queueFilter]);
 
   const filteredStats = useMemo(
     () => (data ? aggregate(filteredMatches, data.account.puuid) : null),
     [data, filteredMatches],
-  )
+  );
 
   if (!configured) {
     return (
@@ -91,13 +106,25 @@ export function ProfileView({
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.04] text-primary">
             <UserCircle2 size={24} />
           </div>
-          <h2 className="mt-4 text-base font-semibold text-foreground">No Riot account linked</h2>
+          <h2 className="mt-4 text-base font-semibold text-foreground">
+            No Riot account linked
+          </h2>
           <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-            Open the League of Legends client to auto-detect your account, or enter your Riot ID
-            and a developer API key manually. You can also look up any player by Riot ID below.
+            {!hasIdentity
+              ? "Add your Riot ID below or open the League of Legends client to auto-detect your account."
+              : !hasApiAccess
+                ? "Your Riot ID is saved, but you still need a Riot developer API key in Settings (or RIOT_API_KEY in .env) to load profile data."
+                : "Open the League of Legends client to auto-detect your account, or enter your Riot ID and a developer API key manually. You can also look up any player by Riot ID below."}
           </p>
           <div className="mx-auto mt-4 max-w-sm">
-            <PlayerSearch placeholder="Look up any player — Name#TAG" />
+            <PlayerSearch
+              platform={platform}
+              placeholder={
+                hasIdentity
+                  ? "Look up a player on this region — Name#TAG"
+                  : "Look up a player — Name#TAG"
+              }
+            />
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
             <button
@@ -113,15 +140,15 @@ export function ProfileView({
               onClick={onOpenSettings}
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-white/15"
             >
-              Open Settings
+              {hasIdentity && !hasApiAccess ? "Add API key" : "Open Settings"}
             </button>
           </div>
         </section>
       </div>
-    )
+    );
   }
 
-  if (status === 'loading' && !data) {
+  if (status === "loading" && !data) {
     return (
       <div className="flex flex-col gap-4">
         <PageHeader />
@@ -143,10 +170,10 @@ export function ProfileView({
           <Skeleton className="h-96" />
         </div>
       </div>
-    )
+    );
   }
 
-  if (status === 'error' || !data) {
+  if (status === "error" || !data) {
     return (
       <div className="flex flex-col gap-4">
         <PageHeader />
@@ -160,7 +187,7 @@ export function ProfileView({
                 Could not load your profile
               </h2>
               <p className="mt-1 break-words text-xs text-red-300/80">
-                {error ?? 'Unknown error'}
+                {error ?? "Unknown error"}
               </p>
               <div className="mt-3 flex items-center gap-2">
                 <button
@@ -183,12 +210,12 @@ export function ProfileView({
           </div>
         </section>
       </div>
-    )
+    );
   }
 
-  const { account, summoner, league, dataDragonVersion } = data
-  const soloEntry = league.find((e) => e.queueType === 'RANKED_SOLO_5x5')
-  const flexEntry = league.find((e) => e.queueType === 'RANKED_FLEX_SR')
+  const { account, summoner, league, dataDragonVersion } = data;
+  const soloEntry = league.find((e) => e.queueType === "RANKED_SOLO_5x5");
+  const flexEntry = league.find((e) => e.queueType === "RANKED_FLEX_SR");
 
   return (
     <div className="flex flex-col gap-4">
@@ -199,10 +226,13 @@ export function ProfileView({
           <button
             type="button"
             onClick={onRefresh}
-            disabled={status === 'loading'}
+            disabled={status === "loading"}
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-foreground transition-colors hover:border-white/15 disabled:opacity-50"
           >
-            <RefreshCw size={12} className={cn(status === 'loading' && 'animate-spin')} />
+            <RefreshCw
+              size={12}
+              className={cn(status === "loading" && "animate-spin")}
+            />
             Refresh
           </button>
         }
@@ -214,11 +244,15 @@ export function ProfileView({
         <div className="flex flex-wrap items-center gap-5">
           <div className="relative shrink-0">
             <img
-              src={ddragonProfileIcon(dataDragonVersion, summoner.profileIconId)}
+              src={ddragonProfileIcon(
+                dataDragonVersion,
+                summoner.profileIconId,
+              )}
               alt=""
               className="h-24 w-24 rounded-2xl border border-border object-cover shadow-lg shadow-black/30"
               onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.visibility = 'hidden'
+                (e.currentTarget as HTMLImageElement).style.visibility =
+                  "hidden";
               }}
             />
             <span className="absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 font-mono text-[11px] font-bold tabular-nums text-primary-foreground shadow">
@@ -231,7 +265,9 @@ export function ProfileView({
               <h1 className="truncate text-3xl font-semibold tracking-tight text-foreground">
                 {account.gameName}
               </h1>
-              <span className="font-mono text-base text-muted-foreground">#{account.tagLine}</span>
+              <span className="font-mono text-base text-muted-foreground">
+                #{account.tagLine}
+              </span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {clientLive && (
@@ -266,7 +302,10 @@ export function ProfileView({
           {soloEntry ? (
             <RankedPanel entry={soloEntry} icon={<Trophy size={14} />} />
           ) : (
-            <EmptyRankedPanel label="Ranked Solo / Duo" icon={<Trophy size={14} />} />
+            <EmptyRankedPanel
+              label="Ranked Solo / Duo"
+              icon={<Trophy size={14} />}
+            />
           )}
           {flexEntry ? (
             <RankedPanel entry={flexEntry} icon={<Shield size={14} />} />
@@ -300,10 +339,10 @@ export function ProfileView({
                     type="button"
                     onClick={() => setQueueFilter(q.id)}
                     className={cn(
-                      'rounded-full px-2.5 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-wide ring-1 transition-colors',
+                      "rounded-full px-2.5 py-1 font-mono text-[10.5px] font-semibold uppercase tracking-wide ring-1 transition-colors",
                       queueFilter === q.id
-                        ? 'bg-primary/15 text-primary ring-primary/30'
-                        : 'bg-white/[0.03] text-muted-foreground ring-white/5 hover:text-foreground',
+                        ? "bg-primary/15 text-primary ring-primary/30"
+                        : "bg-white/[0.03] text-muted-foreground ring-white/5 hover:text-foreground",
                     )}
                   >
                     {q.label}
@@ -311,8 +350,8 @@ export function ProfileView({
                 ))}
               </div>
               <span className="ml-auto font-mono text-[10px] tabular-nums text-muted-foreground">
-                {filteredMatches.length}{' '}
-                {filteredMatches.length === 1 ? 'match' : 'matches'}
+                {filteredMatches.length}{" "}
+                {filteredMatches.length === 1 ? "match" : "matches"}
               </span>
             </div>
 
@@ -336,8 +375,8 @@ export function ProfileView({
             ) : (
               <ul className="flex flex-col gap-2">
                 {filteredMatches.map((match) => {
-                  const self = findSelf(match, account.puuid)
-                  if (!self) return null
+                  const self = findSelf(match, account.puuid);
+                  if (!self) return null;
                   return (
                     <MatchRow
                       key={match.metadata.matchId}
@@ -347,7 +386,7 @@ export function ProfileView({
                       ownIdentity={ownIdentity}
                       onSelectPlayer={onSelectPlayer}
                     />
-                  )
+                  );
                 })}
               </ul>
             )}
@@ -355,5 +394,5 @@ export function ProfileView({
         </main>
       </div>
     </div>
-  )
+  );
 }
