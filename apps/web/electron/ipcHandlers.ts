@@ -256,7 +256,6 @@ export function registerIpcHandlers() {
         platform: PlatformRegion
         gameName: string
         tagLine: string
-        apiKey?: string
         matchCount?: number
       },
     ): Promise<
@@ -264,12 +263,10 @@ export function registerIpcHandlers() {
     > => {
       const { platform, gameName, tagLine, matchCount } = params
 
-      // Prefer the renderer-provided key when present so users can override
-      // whatever lives in .env without a restart. Fall back to the env var.
-      const apiKey = params.apiKey?.trim() || process.env.RIOT_API_KEY?.trim() || ''
+      const apiKey = process.env.RIOT_API_KEY?.trim() || ''
 
       if (!apiKey) {
-        return { success: false, error: 'Missing Riot API key. Set RIOT_API_KEY in .env or enter one in Settings.' }
+        return { success: false, error: 'Missing Riot API key. Set RIOT_API_KEY in .env.' }
       }
       if (!gameName || !tagLine) {
         return { success: false, error: 'Missing Riot ID (gameName#tagLine).' }

@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { PLATFORM_REGIONS, type PlatformRegion } from '../types/riot'
 
 export type RiotSettings = {
-  apiKey: string
   gameName: string
   tagLine: string
   platform: PlatformRegion
@@ -12,7 +11,6 @@ export type RiotSettings = {
 const RIOT_SETTINGS_KEY = 'crux-riot-settings'
 
 export const DEFAULT_RIOT_SETTINGS: RiotSettings = {
-  apiKey: '',
   gameName: '',
   tagLine: '',
   platform: 'na1',
@@ -31,7 +29,6 @@ function loadRiotSettings(): RiotSettings {
       : DEFAULT_RIOT_SETTINGS.platform
 
     return {
-      apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
       gameName: typeof parsed.gameName === 'string' ? parsed.gameName : '',
       tagLine: typeof parsed.tagLine === 'string' ? parsed.tagLine : '',
       platform,
@@ -55,6 +52,9 @@ export function isRiotConfigured(
   settings: RiotSettings,
   options: { hasEnvKey?: boolean } = {},
 ): boolean {
-  const hasKey = Boolean(settings.apiKey) || Boolean(options.hasEnvKey)
-  return hasKey && Boolean(settings.gameName) && Boolean(settings.tagLine)
+  return (
+    Boolean(options.hasEnvKey) &&
+    Boolean(settings.gameName) &&
+    Boolean(settings.tagLine)
+  )
 }

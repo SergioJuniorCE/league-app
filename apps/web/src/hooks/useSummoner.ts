@@ -28,8 +28,7 @@ type UseSummonerOptions = {
 /**
  * Fetches the Riot summoner bundle (profile, rank, recent matches).
  * Re-fetches when Riot settings, matchCount, or `refreshKey` change.
- * When `hasEnvKey` is true, the renderer may skip sending an api key and
- * the main process will fall back to `process.env.RIOT_API_KEY`.
+ * The Riot API key stays in the main process and is read from `RIOT_API_KEY`.
  */
 export function useSummoner(settings: RiotSettings, options: UseSummonerOptions = {}) {
   const { matchCount = 10, refreshKey = 0, hasEnvKey = false } = options
@@ -46,12 +45,10 @@ export function useSummoner(settings: RiotSettings, options: UseSummonerOptions 
     setState((prev) => ({ ...prev, status: 'loading', error: null }))
 
     try {
-      const uiKey = settings.apiKey.trim()
       const result = await window.electronAPI.getRiotSummoner({
         platform: settings.platform,
         gameName: settings.gameName.trim(),
         tagLine: settings.tagLine.replace(/^#/, '').trim(),
-        apiKey: uiKey || undefined,
         matchCount,
       })
 

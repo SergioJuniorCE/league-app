@@ -45,8 +45,7 @@ function App() {
   } = useLeagueRecorder(settings);
 
   // When the League client is running, prefer its identity over whatever
-  // the user typed into Settings. The API key always comes from user
-  // settings (or the RIOT_API_KEY env var in main).
+  // the user typed into Settings. The API key stays in the main process.
   const effectiveRiotSettings = useMemo<RiotSettings>(() => {
     if (lcu.isLive && lcu.data) {
       return {
@@ -119,7 +118,7 @@ function App() {
                     effectiveRiotSettings.tagLine.trim(),
                   )}
                   hasApiAccess={Boolean(
-                    effectiveRiotSettings.apiKey.trim() || hasEnvKey,
+                    hasEnvKey,
                   )}
                   platform={effectiveRiotSettings.platform}
                   clientLive={lcu.isLive}
@@ -218,9 +217,9 @@ type OtherPlayerProfileRouteProps = {
 };
 
 /**
- * Renders someone else's Riot profile. Reuses our API key from the effective
- * settings, but takes both platform + Riot ID from the URL so the page is
- * self-contained and doesn't silently depend on the signed-in user's shard.
+ * Renders someone else's Riot profile. Takes both platform + Riot ID from the
+ * URL so the page is self-contained and doesn't silently depend on the
+ * signed-in user's shard.
  * A separate `useSummoner` instance keeps this fetch independent from the
  * user's own profile so navigating between players doesn't clobber "my
  * profile" cache.
@@ -279,7 +278,7 @@ function OtherPlayerProfileRoute({
       error={summoner.error}
       configured={configured}
       hasIdentity={Boolean(gameName.trim() && tagLine.trim())}
-      hasApiAccess={Boolean(targetSettings.apiKey.trim() || hasEnvKey)}
+      hasApiAccess={Boolean(hasEnvKey)}
       platform={targetSettings.platform}
       clientLive={false}
       isViewingOther

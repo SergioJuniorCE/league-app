@@ -33,7 +33,6 @@ type RiotFetchParams = {
   platform: string
   gameName: string
   tagLine: string
-  apiKey?: string
   matchCount?: number
 }
 

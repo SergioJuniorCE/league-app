@@ -24,4 +24,7 @@ dist-ssr
 *.sw?
 
 dist-electron
+out
 .env
+
+.turbo

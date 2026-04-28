@@ -129,7 +129,6 @@ export type RiotFetchParams = {
   platform: PlatformRegion
   gameName: string
   tagLine: string
-  apiKey?: string
   matchCount?: number
 }
 

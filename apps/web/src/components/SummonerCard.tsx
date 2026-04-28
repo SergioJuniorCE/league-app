@@ -107,7 +107,7 @@ export function SummonerCard({ status, data, error, onRefresh, onGoToSettings, c
           <div className="flex-1">
             <h2 className="text-sm font-semibold text-foreground">Connect your Riot account</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Add your Riot ID, region, and a developer API key in Settings to show your summoner
+              Add your Riot ID and region in Settings to show your summoner
               profile, rank, and recent matches.
             </p>
             <button
